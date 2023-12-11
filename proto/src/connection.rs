@@ -4,6 +4,7 @@ use std::{
     net::TcpStream,
 };
 
+use bincode::ErrorKind;
 use native_tls::TlsStream;
 
 use crate::commands::Command;
@@ -47,11 +48,6 @@ impl MutBuf {
     }
 
     fn parse_frame(&mut self) -> Result<Option<Command>, String> {
-        // empty cannot be deserialized
-        if self.is_empty() {
-            return Ok(None);
-        }
-
         let mut buf = Cursor::new(self.consumable());
 
         match bincode::deserialize_from(&mut buf) {
@@ -64,10 +60,10 @@ impl MutBuf {
 
                 Ok(Some(command))
             }
-            Err(e) => {
-                eprintln!("// Bincode error: {}", e.to_string());
-                Ok(None)
-            }
+            Err(e) => match e.as_ref() {
+                ErrorKind::Io(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(None),
+                other => Err(other.to_string()),
+            },
         }
     }
 }

@@ -26,5 +26,5 @@ pub enum Command {
         credential_id: String,
     },
     TextMessage(String),
-		None
+    None,
 }
