@@ -17,8 +17,7 @@ struct MutBuf {
 impl MutBuf {
     fn new(len: usize) -> Self {
         let mut buffer = Vec::with_capacity(len);
-        // safety: that is safe because we never consume the values before it is written after writable call and add_consumable
-        unsafe { buffer.set_len(buffer.capacity()) };
+        buffer.resize(len, 0);
         Self { buffer, cursor: 0 }
     }
 
@@ -44,8 +43,6 @@ impl MutBuf {
 
         if self.cursor == self.buffer.len() {
             self.buffer.resize(self.cursor * 2, 0);
-            // safety: that is safe because we never consume the values before it is written after writable call and add_consumable
-            unsafe { self.buffer.set_len(self.buffer.capacity()) };
         }
     }
 
