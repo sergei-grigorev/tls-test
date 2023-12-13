@@ -1,3 +1,4 @@
+use crate::signature;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -10,8 +11,9 @@ pub enum Command {
         challenge: Vec<u8>,
     },
     CertResponse {
-        signed_challenge: Vec<u8>,
         credential_id: String,
+        signed_challenge: signature::Signature,
+        // somehow store here verifying key makes it's non properly serialized
         pub_certificate: Vec<u8>,
     },
     AuthBegin {
@@ -22,7 +24,7 @@ pub enum Command {
         challenge: Vec<u8>,
     },
     ChallengeResponse {
-        signed_challenge: Vec<u8>,
+        signed_challenge: signature::Signature,
         credential_id: String,
     },
     TextMessage(String),

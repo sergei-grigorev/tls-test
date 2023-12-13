@@ -1,6 +1,6 @@
 use std::{env, fs::File, io::Read, net::TcpStream};
 
-use native_tls::{Certificate, Identity, TlsConnector};
+use native_tls::{Certificate, TlsConnector};
 use proto::commands::Command;
 use proto::connection::{Connection, TlsStreamExt};
 use proto::signature;
@@ -13,8 +13,8 @@ fn main() {
     println!("Current dir: [{}]", current_path);
     let ca_cert_file = format!("{current_path}/certs/ca.crt");
     println!("CA file: [{}]", ca_cert_file);
-    let client_cert_file = format!("{current_path}/certs/client_identity.pfx");
-    println!("Client identity file: [{}]", ca_cert_file);
+    // let client_cert_file = format!("{current_path}/certs/client_identity.pfx");
+    // println!("Client identity file: [{}]", ca_cert_file);
 
     // load CA certificate
     let mut file = File::open(ca_cert_file).expect("Server certificate is not found");
@@ -25,18 +25,18 @@ fn main() {
     let ca_certificate = Certificate::from_pem(&ca_certificate).expect("Certificate is corrupted");
 
     // load client certificate
-    let mut file = File::open(client_cert_file).expect("Client certificate is not found");
-    let mut identify = Vec::new();
-    file.read_to_end(&mut identify)
-        .expect("Problem reading the server certificate");
+    // let mut file = File::open(client_cert_file).expect("Client certificate is not found");
+    // let mut identify = Vec::new();
+    // file.read_to_end(&mut identify)
+    //     .expect("Problem reading the server certificate");
 
-    let identity = Identity::from_pkcs12(&identify, "my_client_password")
-        .expect("Certificate is corrupted or the password is incorrect");
+    // let identity = Identity::from_pkcs12(&identify, "my_client_password")
+    //     .expect("Certificate is corrupted or the password is incorrect");
 
     let connector = TlsConnector::builder()
         .disable_built_in_roots(true)
         .add_root_certificate(ca_certificate)
-        .identity(identity)
+        // .identity(identity)
         .build()
         .unwrap();
 
@@ -58,7 +58,7 @@ fn handle_connection(mut stream: Connection) -> Result<(), String> {
 
     // 2. receive a new challenge
     let private_key: signature::SigningKey;
-    let key_id = "123".to_owned();
+    let key_id: String = signature::new_key_id().to_string();
     if let Command::CertRequest {
         server: _,
         challenge,
@@ -67,14 +67,14 @@ fn handle_connection(mut stream: Connection) -> Result<(), String> {
         // 3. create a new key and send to the server
         let key = signature::make_new_key();
         let signature = signature::sign_challenge(&key, &challenge);
-        let public_key = key.verifying_key();
-        private_key = key;
 
         stream.serialize(Command::CertResponse {
-            signed_challenge: signature.to_vec(),
+            signed_challenge: signature,
             credential_id: key_id.clone(),
-            pub_certificate: public_key.as_bytes().to_vec(),
+            pub_certificate: signature::encode_public_key(&key.verifying_key()),
         })?;
+
+        private_key = key;
     } else {
         return Err("Server should have send a new cert request".into());
     }
@@ -98,7 +98,7 @@ fn handle_connection(mut stream: Connection) -> Result<(), String> {
         let signature = signature::sign_challenge(&private_key, &challenge);
 
         stream.serialize(Command::ChallengeResponse {
-            signed_challenge: signature.to_vec(),
+            signed_challenge: signature,
             credential_id: credential_id,
         })?;
     } else {
@@ -109,7 +109,7 @@ fn handle_connection(mut stream: Connection) -> Result<(), String> {
     let command: Command = stream.deserialize()?;
 
     // send a welcome message
-    stream.serialize(Command::TextMessage("Hello from client".into()))?;
+    stream.serialize(Command::TextMessage(format!("Hello from [{}]", user_name)))?;
 
     // convert to just a text
     let full_message: String = if let Command::TextMessage(line) = command {

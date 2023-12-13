@@ -71,36 +71,23 @@ fn handle_client(mut stream: Connection) -> Result<(), String> {
 
         // 3. receive a new public key
         if let Command::CertResponse {
-            signed_challenge,
             credential_id,
+            signed_challenge,
             pub_certificate,
         } = stream.deserialize()?
         {
             // validate the length
-            if signed_challenge.len() != signature::SIGNATURE_LENGTH
-                || pub_certificate.len() != signature::PUBLIC_KEY_LENGTH
-            {
-                return Err("Signature is incorrect".into());
-            }
+            session_key = signature::decode_public_key(&pub_certificate)?;
 
-            let mut connection_key = [0u8; signature::PUBLIC_KEY_LENGTH];
-            connection_key.copy_from_slice(&pub_certificate);
-
-            session_key = signature::VerifyingKey::from_bytes(&connection_key)
-                .map_err(|e| format!("Public key is broken: {}", e.to_string()))?;
-
-            let mut signature = [0u8; signature::SIGNATURE_LENGTH];
-            signature.copy_from_slice(&signed_challenge);
-
-            let signature = signature::Signature::from_bytes(&signature);
-
-            if !signature::validate_signature(&session_key, &challenge, &signature) {
+            if !signature::validate_signature(&session_key, &challenge, &signed_challenge) {
                 return Err("Signature is not correct".into());
             }
 
             // SUCCESS
             session_credential_id = credential_id;
-            eprintln!("Registered new key {session_credential_id}");
+            eprintln!(
+                "Registered new user [{session_username}] with key_id [{session_credential_id}]"
+            );
         } else {
             return Err("Incorrect certificate response message".into());
         }
@@ -131,16 +118,7 @@ fn handle_client(mut stream: Connection) -> Result<(), String> {
                 return Err("Incorrect credential_id returned".into());
             }
 
-            if signed_challenge.len() != signature::SIGNATURE_LENGTH {
-                return Err("Broken signature".into());
-            }
-
-            // let mut signature = [0u8; signature::SIGNATURE_LENGTH];
-            let mut signature = [0u8; signature::SIGNATURE_LENGTH];
-            signature.copy_from_slice(&signed_challenge);
-            let signature = signature::Signature::from_bytes(&signature);
-
-            if !signature::validate_signature(&session_key, &auth_challenge, &signature) {
+            if !signature::validate_signature(&session_key, &auth_challenge, &signed_challenge) {
                 return Err("Signature is not correct".into());
             }
 
@@ -151,7 +129,10 @@ fn handle_client(mut stream: Connection) -> Result<(), String> {
     }
 
     // send a welcome message
-    stream.serialize(Command::TextMessage("Hello from server".into()))?;
+    stream.serialize(Command::TextMessage(format!(
+        "Hello [{}] from server",
+        session_username
+    )))?;
 
     // wait a client message
     let command: Command = stream.deserialize()?;
