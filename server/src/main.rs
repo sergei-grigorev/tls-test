@@ -2,6 +2,7 @@ use std::{env, fs::File, io::Read, net::TcpListener, sync::Arc, thread};
 
 use native_tls::{Identity, TlsAcceptor};
 use proto::connection::TlsStreamExt;
+use proto::signature;
 use proto::{commands::Command, connection::Connection};
 
 fn main() {
@@ -54,6 +55,101 @@ fn main() {
 }
 
 fn handle_client(mut stream: Connection) -> Result<(), String> {
+    // 1. wait a new user registration
+    let session_username: String;
+    let session_key: signature::VerifyingKey;
+    let session_credential_id: String;
+    if let Command::NewUserBegin { username } = stream.deserialize()? {
+        session_username = username;
+
+        // 2. send a new challenge
+        let challenge = signature::new_challenge();
+        stream.serialize(Command::CertRequest {
+            server: "localhost".to_owned(),
+            challenge: challenge.clone(),
+        })?;
+
+        // 3. receive a new public key
+        if let Command::CertResponse {
+            signed_challenge,
+            credential_id,
+            pub_certificate,
+        } = stream.deserialize()?
+        {
+            // validate the length
+            if signed_challenge.len() != signature::SIGNATURE_LENGTH
+                || pub_certificate.len() != signature::PUBLIC_KEY_LENGTH
+            {
+                return Err("Signature is incorrect".into());
+            }
+
+            let mut connection_key = [0u8; signature::PUBLIC_KEY_LENGTH];
+            connection_key.copy_from_slice(&pub_certificate);
+
+            session_key = signature::VerifyingKey::from_bytes(&connection_key)
+                .map_err(|e| format!("Public key is broken: {}", e.to_string()))?;
+
+            let mut signature = [0u8; signature::SIGNATURE_LENGTH];
+            signature.copy_from_slice(&signed_challenge);
+
+            let signature = signature::Signature::from_bytes(&signature);
+
+            if !signature::validate_signature(&session_key, &challenge, &signature) {
+                return Err("Signature is not correct".into());
+            }
+
+            // SUCCESS
+            session_credential_id = credential_id;
+            eprintln!("Registered new key {session_credential_id}");
+        } else {
+            return Err("Incorrect certificate response message".into());
+        }
+    } else {
+        return Err("Incorrect first message".into());
+    }
+
+    // 4. wait user auth message
+    if let Command::AuthBegin { username } = stream.deserialize()? {
+        if username != session_username {
+            return Err("Unknown user".into());
+        }
+
+        // 5. send a new challenge
+        let auth_challenge = signature::new_challenge();
+        stream.serialize(Command::ChallengeRequest {
+            credential_id: session_credential_id.clone(),
+            challenge: auth_challenge.clone(),
+        })?;
+
+        // 6. validate the signature
+        if let Command::ChallengeResponse {
+            signed_challenge,
+            credential_id,
+        } = stream.deserialize()?
+        {
+            if credential_id != session_credential_id {
+                return Err("Incorrect credential_id returned".into());
+            }
+
+            if signed_challenge.len() != signature::SIGNATURE_LENGTH {
+                return Err("Broken signature".into());
+            }
+
+            // let mut signature = [0u8; signature::SIGNATURE_LENGTH];
+            let mut signature = [0u8; signature::SIGNATURE_LENGTH];
+            signature.copy_from_slice(&signed_challenge);
+            let signature = signature::Signature::from_bytes(&signature);
+
+            if !signature::validate_signature(&session_key, &auth_challenge, &signature) {
+                return Err("Signature is not correct".into());
+            }
+
+            // SUCCESS
+        } else {
+            return Err("Incorrect message, expected challenge response".into());
+        }
+    }
+
     // send a welcome message
     stream.serialize(Command::TextMessage("Hello from server".into()))?;
 

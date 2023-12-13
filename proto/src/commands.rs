@@ -7,22 +7,22 @@ pub enum Command {
     },
     CertRequest {
         server: String,
-        challenge: String,
+        challenge: Vec<u8>,
     },
     CertResponse {
-        signed_challenge: String,
+        signed_challenge: Vec<u8>,
         credential_id: String,
-        pub_certificate: String,
+        pub_certificate: Vec<u8>,
     },
     AuthBegin {
         username: String,
     },
     ChallengeRequest {
         credential_id: String,
-        challenge: String,
+        challenge: Vec<u8>,
     },
     ChallengeResponse {
-        signed_challenge: String,
+        signed_challenge: Vec<u8>,
         credential_id: String,
     },
     TextMessage(String),

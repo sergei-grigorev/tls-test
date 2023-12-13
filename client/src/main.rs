@@ -3,6 +3,7 @@ use std::{env, fs::File, io::Read, net::TcpStream};
 use native_tls::{Certificate, Identity, TlsConnector};
 use proto::commands::Command;
 use proto::connection::{Connection, TlsStreamExt};
+use proto::signature;
 
 fn main() {
     // print current directory
@@ -49,7 +50,62 @@ fn main() {
 }
 
 fn handle_connection(mut stream: Connection) -> Result<(), String> {
-    // wait a server message
+    // 1. start a new user registration
+    let user_name = "sergei";
+    stream.serialize(Command::NewUserBegin {
+        username: user_name.to_owned(),
+    })?;
+
+    // 2. receive a new challenge
+    let private_key: signature::SigningKey;
+    let key_id = "123".to_owned();
+    if let Command::CertRequest {
+        server: _,
+        challenge,
+    } = stream.deserialize()?
+    {
+        // 3. create a new key and send to the server
+        let key = signature::make_new_key();
+        let signature = signature::sign_challenge(&key, &challenge);
+        let public_key = key.verifying_key();
+        private_key = key;
+
+        stream.serialize(Command::CertResponse {
+            signed_challenge: signature.to_vec(),
+            credential_id: key_id.clone(),
+            pub_certificate: public_key.as_bytes().to_vec(),
+        })?;
+    } else {
+        return Err("Server should have send a new cert request".into());
+    }
+
+    // 4. try to auth
+    stream.serialize(Command::AuthBegin {
+        username: user_name.to_owned(),
+    })?;
+
+    // 5. receive a challenge
+    if let Command::ChallengeRequest {
+        credential_id,
+        challenge,
+    } = stream.deserialize()?
+    {
+        // validate the there is no errors
+        if credential_id != key_id {
+            return Err("Server requested wrong key".into());
+        }
+
+        let signature = signature::sign_challenge(&private_key, &challenge);
+
+        stream.serialize(Command::ChallengeResponse {
+            signed_challenge: signature.to_vec(),
+            credential_id: credential_id,
+        })?;
+    } else {
+        return Err("Server should have send an auth challenge".into());
+    }
+
+    // 6. wait a server message
     let command: Command = stream.deserialize()?;
 
     // send a welcome message
