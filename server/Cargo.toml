@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 native-tls = "0.2.11"
-proto = { path = "../proto" }
+proto = { path = "../proto", features = ["native-tls"]}

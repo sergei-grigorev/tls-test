@@ -1,7 +1,7 @@
 use std::{env, fs::File, io::Read, net::TcpListener, sync::Arc, thread};
 
 use native_tls::{Identity, TlsAcceptor};
-use proto::connection::TlsStreamExt;
+use proto::connection::{NativeTls, TlsStreamExt};
 use proto::signature;
 use proto::{commands::Command, connection::Connection};
 
@@ -38,7 +38,7 @@ fn main() {
                     // run TLS
                     match acceptor.accept(stream) {
                         Ok(stream) => {
-                            let stream = Connection::new(stream);
+                            let stream = Connection::<NativeTls>::new(stream);
                             if let Err(e) = handle_client(stream) {
                                 eprintln!("Error: {e}");
                             }
@@ -54,13 +54,18 @@ fn main() {
     }
 }
 
-fn handle_client(mut stream: Connection) -> Result<(), String> {
+fn handle_client(mut stream: Connection<NativeTls>) -> Result<(), String> {
     // 1. wait a new user registration
     let session_username: String;
     let session_key: signature::VerifyingKey;
     let session_credential_id: String;
+    println!("Wait a message from the client");
     if let Command::NewUserBegin { username } = stream.deserialize()? {
         session_username = username;
+        println!(
+            "Received a registration request from [{}]",
+            session_username
+        );
 
         // 2. send a new challenge
         let challenge = signature::new_challenge();
