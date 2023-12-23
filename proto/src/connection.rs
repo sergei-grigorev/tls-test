@@ -17,8 +17,7 @@ pub struct NativeTls {
 
 #[cfg(feature = "rust-tls")]
 pub struct RustTls {
-    client: rustls::ClientConnection,
-    socket: TcpStream,
+    stream: rustls::StreamOwned<rustls::ClientConnection, TcpStream>,
 }
 
 pub struct Connection<S> {
@@ -42,8 +41,10 @@ impl Connection<RustTls> {
     pub fn new(connection: rustls::ClientConnection, socket: TcpStream) -> Self {
         Self {
             connection: RustTls {
-                client: connection,
-                socket,
+                stream: rustls::StreamOwned {
+                    conn: connection,
+                    sock: socket,
+                },
             },
             buf: MutBuf::new(4096),
         }
@@ -69,15 +70,10 @@ impl TlsStreamExt for Connection<NativeTls> {
 #[cfg(feature = "rust-tls")]
 impl TlsStreamExt for Connection<RustTls> {
     fn serialize(&mut self, message: Command) -> Result<(), String> {
-        let mut stream =
-            rustls::Stream::new(&mut self.connection.client, &mut self.connection.socket);
-
-        serialize(&mut stream, message)
+        serialize(&mut self.connection.stream, message)
     }
 
     fn deserialize(&mut self) -> Result<Command, String> {
-        let mut stream =
-            rustls::Stream::new(&mut self.connection.client, &mut self.connection.socket);
-        deserialize(&mut stream, &mut self.buf)
+        deserialize(&mut self.connection.stream, &mut self.buf)
     }
 }
