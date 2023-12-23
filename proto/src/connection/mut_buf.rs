@@ -113,6 +113,6 @@ mod tests {
         );
 
         // should be empty
-        assert_eq!(true, mut_buf.is_empty());
+        assert!(mut_buf.is_empty());
     }
 }
