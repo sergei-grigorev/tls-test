@@ -7,6 +7,7 @@ use proto::commands::Command;
 use proto::connection::{Connection, RustTls, TlsStreamExt};
 use proto::signature;
 use rustls::{ClientConfig, ClientConnection, RootCertStore};
+use x509_parser::pem::parse_x509_pem;
 
 fn main() {
     // print current directory
@@ -14,7 +15,7 @@ fn main() {
     let current_path = current_path.as_path().to_str().unwrap_or_default();
 
     println!("Current dir: [{}]", current_path);
-    let ca_cert_file = format!("{current_path}/certs/ca.der");
+    let ca_cert_file = format!("{current_path}/certs/ca.crt");
     println!("CA file: [{}]", ca_cert_file);
     // let client_cert_file = format!("{current_path}/certs/client_identity.pfx");
     // println!("Client identity file: [{}]", ca_cert_file);
@@ -24,7 +25,9 @@ fn main() {
     let mut ca_certificate = Vec::new();
     file.read_to_end(&mut ca_certificate)
         .expect("Problem reading the server certificate");
-    let ca_certificate = CertificateDer::from(ca_certificate);
+    let (_, parsed) =
+        parse_x509_pem(&ca_certificate).expect("Problem with parsing the certificate");
+    let ca_certificate = CertificateDer::from(parsed.contents);
 
     let mut ca_root = RootCertStore::empty();
     ca_root
