@@ -8,7 +8,7 @@ pub fn serialize<S: Write>(stream: &mut S, message: Command) -> Result<(), Strin
     let buffer = bincode::serialize(&message).unwrap();
     stream
         .write_all(&buffer)
-        .map_err(|e| format!("IO write error: {}", e.to_string()))
+        .map_err(|e| format!("IO write error: {}", e))
 }
 
 pub fn deserialize<S: Read>(stream: &mut S, buf: &mut MutBuf) -> Result<Command, String> {
@@ -21,7 +21,7 @@ pub fn deserialize<S: Read>(stream: &mut S, buf: &mut MutBuf) -> Result<Command,
         // read to the buffer otherwise
         let n = stream
             .read(buf.writable())
-            .map_err(|e| format!("IO read error: {}", e.to_string()))?;
+            .map_err(|e| format!("IO read error: {}", e))?;
 
         // if read returns 0 then the connection is closed (properly)
         if 0 == n {

@@ -11,8 +11,7 @@ pub struct MutBuf {
 
 impl MutBuf {
     pub fn new(len: usize) -> Self {
-        let mut buffer = Vec::with_capacity(len);
-        buffer.resize(len, 0);
+        let buffer = vec![0u8; len];
         Self { buffer, cursor: 0 }
     }
 

@@ -49,9 +49,7 @@ fn main() {
 
     let arc_config = Arc::new(config);
     let server_name = "localhost".try_into().unwrap();
-    let client = ClientConnection::new(arc_config, server_name)
-        .unwrap()
-        .into();
+    let client = ClientConnection::new(arc_config, server_name).unwrap();
 
     let socket = TcpStream::connect("127.0.0.1:8443").unwrap();
     let stream = Connection::<RustTls>::new(client, socket);
@@ -114,7 +112,7 @@ fn handle_connection(mut stream: Connection<RustTls>) -> Result<(), String> {
 
         stream.serialize(Command::ChallengeResponse {
             signed_challenge: signature,
-            credential_id: credential_id,
+            credential_id,
         })?;
     } else {
         return Err("Server should have send an auth challenge".into());

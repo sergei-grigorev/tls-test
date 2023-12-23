@@ -44,12 +44,12 @@ fn main() {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Connection error: {}", e.to_string());
+                            eprintln!("Connection error: {}", e);
                         }
                     }
                 });
             }
-            Err(e) => eprintln!("Connection failed: {}", e.to_string()),
+            Err(e) => eprintln!("Connection failed: {}", e),
         }
     }
 }

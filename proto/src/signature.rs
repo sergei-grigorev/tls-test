@@ -38,5 +38,5 @@ pub fn sign_challenge(key: &SigningKey, challenge: &[u8]) -> Signature {
 }
 
 pub fn validate_signature(key: &VerifyingKey, challenge: &[u8], signature: &Signature) -> bool {
-    key.verify(challenge, &signature).is_ok()
+    key.verify(challenge, signature).is_ok()
 }
